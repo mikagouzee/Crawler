@@ -71,20 +71,7 @@ namespace Test_Console
             Task downloadFile = client.GetAsync(baseUrl + item).Result.Content.CopyToAsync(File.Create(fileName));
 
             await downloadFile;
-            //Stream downloadedFile = client.GetAsync(baseUrl + item).Result.Content.ReadAsStreamAsync().Result;
             
-            //using (Stream file = File.Create(fileName))
-            //{
-            //    Console.WriteLine("downloading " + fileName);
-            //    CopyStream(downloadedFile, file);
-            //}
-
-            #region async preparation 
-            //Task<Stream> mydownloadedFile = client.GetAsync(baseUrl + item).Result.Content.ReadAsStreamAsync();
-            //return mydownloadedFile;
-            //listOfTasks.Add(downloadedFile);
-            #endregion
-
         }
 
         public static void CopyStream(Stream input, Stream output)
