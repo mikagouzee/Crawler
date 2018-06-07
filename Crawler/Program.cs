@@ -21,7 +21,7 @@ namespace Test_Console
 
         public static HttpClient client = new HttpClient();
 
-        static async void Main(string[] args)
+        static void Main(string[] args)
         {
             var doc = web.Load(baseUrl);
 
@@ -30,14 +30,25 @@ namespace Test_Console
 
             FilterPath(doc);
 
+            string localPath, fullPath;
+            int startIndex;
 
             foreach (var item in endTargets)
             {
-                DownloadFile(item);
-                //listOfTasks.Add(DownloadFile(item));
+                Task.WaitAll(
+                    client.GetAsync(baseUrl + item).ContinueWith((x) =>
+                        {
+                            var fileName = item.Split('/').Last();
+                            startIndex = item.IndexOf(fileName);
+                            Console.WriteLine("downloading " + fileName);
+                            localPath = item.Remove(startIndex).Replace('/', '\\');
+                            fullPath = folderToSave + localPath;
+                            Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
+                            x.Result.Content.CopyToAsync(File.Create(fileName));
+                        }));
             }
 
-            Task.WaitAll();
+            
 
             Console.WriteLine(endTargets.Count +" files downloaded");
             Console.ReadLine();
@@ -68,9 +79,9 @@ namespace Test_Console
             
             Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
 
-            Task downloadFile = client.GetAsync(baseUrl + item).Result.Content.CopyToAsync(File.Create(fileName));
+            //return Task downloadFile = client.GetAsync(baseUrl + item).Result.Content.CopyToAsync(File.Create(fileName));
 
-            await downloadFile;
+            //await downloadFile;
             
         }
 
