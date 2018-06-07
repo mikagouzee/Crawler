@@ -13,7 +13,7 @@ namespace Test_Console
     class Program
     {
         public static List<string> endTargets = new List<string>();
-        //public static List<Task<Stream>> listOfTasks = new List<Task<Stream>>();
+        public static List<Task<HttpResponseMessage>> listOfTasks = new List<Task<HttpResponseMessage>>();
         public static HtmlWeb web = new HtmlWeb();
         const string baseUrl = "https://rpg.rem.uz";
 
@@ -33,22 +33,23 @@ namespace Test_Console
             string localPath, fullPath;
             int startIndex;
 
-            foreach (var item in endTargets)
+            Parallel.ForEach<string>(endTargets, item =>
             {
-                Task.WaitAll(
-                    client.GetAsync(baseUrl + item).ContinueWith((x) =>
-                        {
-                            var fileName = item.Split('/').Last();
-                            startIndex = item.IndexOf(fileName);
-                            Console.WriteLine("downloading " + fileName);
-                            localPath = item.Remove(startIndex).Replace('/', '\\');
-                            fullPath = folderToSave + localPath;
-                            Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
-                            x.Result.Content.CopyToAsync(File.Create(fileName));
-                        }));
-            }
+                var fileName = item.Split('/').Last();
+                startIndex = item.IndexOf(fileName);
+                localPath = item.Remove(startIndex).Replace('/', '\\');
+                fullPath = folderToSave + localPath;
+                Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
+                listOfTasks.Add(client.GetAsync(baseUrl + item));
+            });
 
-            
+            Task.WhenAny(listOfTasks).ContinueWith((x) =>
+             {
+                 Console.WriteLine("downloading " + fileName);
+                 
+                 x.Result.Content.CopyToAsync(File.Create(fileName));
+             });
+
 
             Console.WriteLine(endTargets.Count +" files downloaded");
             Console.ReadLine();
