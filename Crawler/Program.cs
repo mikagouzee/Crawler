@@ -13,7 +13,7 @@ namespace Test_Console
     class Program
     {
         public static List<string> endTargets = new List<string>();
-        //public static List<Task> listOfTasks = new List<Task>();
+        //public static List<Task<Stream>> listOfTasks = new List<Task<Stream>>();
         public static HtmlWeb web = new HtmlWeb();
         const string baseUrl = "https://rpg.rem.uz";
 
@@ -21,7 +21,7 @@ namespace Test_Console
 
         public static HttpClient client = new HttpClient();
 
-        static void Main(string[] args)
+        static async void Main(string[] args)
         {
             var doc = web.Load(baseUrl);
 
@@ -34,28 +34,33 @@ namespace Test_Console
             foreach (var item in endTargets)
             {
                 DownloadFile(item);
+                //listOfTasks.Add(DownloadFile(item));
             }
-            
+
+            Task.WaitAll();
+
             Console.WriteLine(endTargets.Count +" files downloaded");
             Console.ReadLine();
 
             #region asyncprep
-            //List<Stream> allStreams = await Task.WhenAll(listOfTasks);
-
-            //foreach (var task in listOfTasks)
+            //Stream[] allStreams = await Task.WhenAll(listOfTasks);
+            
+            //foreach (var stream in allStreams)
             //{
-
+            //    using (Stream file = File.Create(stream))
             //}
 
             #endregion
 
         }
 
-        public static void DownloadFile(string item)
+        static async Task DownloadFile(string item)
         {
             var fileName = item.Split('/').Last();
 
             int startindex = item.IndexOf(fileName);
+
+            Console.WriteLine("downloading " + fileName);
 
             var localPath = item.Remove(startindex).Replace('/', '\\');
 
@@ -63,17 +68,20 @@ namespace Test_Console
             
             Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
 
-            Stream downloadedFile = client.GetAsync(baseUrl + item).Result.Content.ReadAsStreamAsync().Result;
+            Task downloadFile = client.GetAsync(baseUrl + item).Result.Content.CopyToAsync(File.Create(fileName));
+
+            await downloadFile;
+            //Stream downloadedFile = client.GetAsync(baseUrl + item).Result.Content.ReadAsStreamAsync().Result;
             
-            using (Stream file = File.Create(fileName))
-            {
-                Console.WriteLine("downloading " + fileName);
-                CopyStream(downloadedFile, file);
-            }
+            //using (Stream file = File.Create(fileName))
+            //{
+            //    Console.WriteLine("downloading " + fileName);
+            //    CopyStream(downloadedFile, file);
+            //}
 
             #region async preparation 
-            //Task<Stream> downloadedFile = client.GetAsync(baseUrl + item).Result.Content.ReadAsStreamAsync();
-
+            //Task<Stream> mydownloadedFile = client.GetAsync(baseUrl + item).Result.Content.ReadAsStreamAsync();
+            //return mydownloadedFile;
             //listOfTasks.Add(downloadedFile);
             #endregion
 
