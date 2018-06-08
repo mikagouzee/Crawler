@@ -23,35 +23,34 @@ namespace Test_Console
 
         static void Main(string[] args)
         {
-            var doc = web.Load(baseUrl);
-
             client.Timeout = TimeSpan.FromMinutes(15);
-            //var testValue = @"/13th%20Age/13th%20Age%20Monthly%20-%20Vol%201/01%20-%20Dragon%20Riding.pdf";
-
-            //FilterPath(doc);
-
             string localPath, fullPath;
             int startIndex;
 
-            endTargets = new List<string>();
-            endTargets.Add("/13th%20Age/13%20True%20Ways.pdf");
-            endTargets.Add("/13th%20Age/13th%20Age%20-%20Map.pdf");
-            endTargets.Add("/13th%20Age/13th%20Age%20Bestiary%202%20-%20Lions%20%26%20Tigers%20%26%20Owlbears.pdf");
+            var doc = web.Load(baseUrl);
+            FilterPath(doc).Wait();
+            //ItemFormat = @"/13th%20Age/13th%20Age%20Monthly%20-%20Vol%201/01%20-%20Dragon%20Riding.pdf";
 
+            #region short test list
+            //endTargets = new List<string>();
+            //endTargets.Add("/13th%20Age/13%20True%20Ways.pdf");
+            //endTargets.Add("/13th%20Age/13th%20Age%20-%20Map.pdf");
+            //endTargets.Add("/13th%20Age/13th%20Age%20Bestiary%202%20-%20Lions%20%26%20Tigers%20%26%20Owlbears.pdf");
+            #endregion
 
+            //download each files
             Parallel.ForEach<string>(endTargets, item =>
-            //foreach(var item in endTargets)
             {
                 var task = client.GetAsync(baseUrl + item)
                     .ContinueWith(async (x) =>
                     {
-                        var fileName = item.Split('/').Last();
+                        var fileName = item.Split('/').Last().Replace("%20%", " ");
                         startIndex = item.IndexOf(fileName);
                         localPath = item.Remove(startIndex).Replace('/', '\\');
                         fullPath = folderToSave + localPath;
                         Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
 
-                        var streamDest = File.Create(fileName);
+                        var streamDest = File.Create(fullPath + fileName);
 
                         await x.Result.Content.CopyToAsync(streamDest);
 
@@ -67,75 +66,38 @@ namespace Test_Console
 
         }
 
-        static async Task DownloadFile(string item)
+        public static Task FilterPath(HtmlDocument doc)
         {
-            var fileName = item.Split('/').Last();
+            //this method will render the doc with Xpath, and search for the links in a table
+            //each link found will be parsed to find out if it's a file or another link
+            //sublinks are processed again, while fileLinks are added to "endTargets"
 
-            int startindex = item.IndexOf(fileName);
-
-            Console.WriteLine("downloading " + fileName);
-
-            var localPath = item.Remove(startindex).Replace('/', '\\');
-
-            var fullPath = folderToSave + localPath;
-
-            Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
-
-            //return Task downloadFile = client.GetAsync(baseUrl + item).Result.Content.CopyToAsync(File.Create(fileName));
-
-            //await downloadFile;
-
-        }
-
-        public static void CopyStream(Stream input, Stream output)
-        {
-            byte[] buffer = new byte[8 * 1024];
-
-            int len;
-
-            while ((len = input.Read(buffer, 0, buffer.Length)) > 0)
-            {
-                output.Write(buffer, 0, len);
-            }
-        }
-
-        public static void FilterPath(HtmlDocument doc)
-        {
+            var tasks = new List<Task>();
             var target = doc.DocumentNode.SelectNodes("//td/a");
-
-            var list = new List<Task>();
-
-            if (target == null)
-                return;
-
+            
             foreach (var item in target)
             {
                 var href = item.Attributes["href"].Value;
 
-                if (href != "..")
+                if(href != "..") //goes back to higher level, we need to avoid those
                 {
-                    if (IsEndPath(href))
+                    if (!IsEndPath(href))
+                    {
+                        var uri = baseUrl + href;
+                        var newDoc = web.Load(uri);
+                        tasks.Add(FilterPath(newDoc));
+                    }
+                    else
                     {
                         if (!endTargets.Contains(href))
                         {
                             endTargets.Add(href);
-                            continue;
                         }
                     }
-
-                    var uri = baseUrl + href;
-                    //var newDoc = web.Load(uri);
-                    var task = web.LoadFromWebAsync(uri).ContinueWith((x) =>
-                    {
-                        FilterPath(x.Result);
-                    });
-
-                    list.Add(task);
-                    Console.WriteLine(list.Count);
                 }
             }
 
-            Task.WaitAll(list.ToArray());
+            return Task.WhenAll(tasks);
         }
 
         public static bool IsEndPath(string path)
