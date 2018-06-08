@@ -51,7 +51,7 @@ namespace Test_Console
                         Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
 
                         var streamDest = File.Create(fullPath + fileName);
-
+                        Console.WriteLine("Downloading "+fileName);
                         await x.Result.Content.CopyToAsync(streamDest);
 
                     });
@@ -74,12 +74,13 @@ namespace Test_Console
 
             var tasks = new List<Task>();
             var target = doc.DocumentNode.SelectNodes("//td/a");
-            
-            foreach (var item in target)
+
+            //foreach (var item in target)
+            Parallel.ForEach<HtmlNode>(target, item =>
             {
                 var href = item.Attributes["href"].Value;
 
-                if(href != "..") //goes back to higher level, we need to avoid those
+                if (href != "..") //goes back to higher level, we need to avoid those
                 {
                     if (!IsEndPath(href))
                     {
@@ -91,11 +92,12 @@ namespace Test_Console
                     {
                         if (!endTargets.Contains(href))
                         {
+                            Console.WriteLine("Found path to file : "+href.Replace("%20%", " "));
                             endTargets.Add(href);
                         }
                     }
                 }
-            }
+            });
 
             return Task.WhenAll(tasks);
         }
