@@ -17,11 +17,11 @@ namespace Test_Console
         public static HtmlWeb web = new HtmlWeb();
         const string baseUrl = "https://rpg.rem.uz";
 
-        public static string folderToSave = "YOUR FOLDER";
+        public static string folderToSave = @"D:\Rpg-Rem";
 
         public static HttpClient client = new HttpClient();
 
-        static async void Main(string[] args)
+        static void Main(string[] args)
         {
             var doc = web.Load(baseUrl);
 
@@ -68,7 +68,7 @@ namespace Test_Console
             
             Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
 
-            Task downloadFile = client.GetAsync(baseUrl + item).Result.Content.CopyToAsync(File.Create(fileName));
+            Task downloadFile = client.GetAsync(baseUrl + item).Result.Content.CopyToAsync(File.Create((fullPath+fileName)));
 
             await downloadFile;
             //Stream downloadedFile = client.GetAsync(baseUrl + item).Result.Content.ReadAsStreamAsync().Result;
