@@ -2,6 +2,7 @@
 using HtmlAgilityPack;
 using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -13,123 +14,119 @@ namespace Test_Console
     class Program
     {
         public static List<string> endTargets = new List<string>();
-        //public static List<Task<Stream>> listOfTasks = new List<Task<Stream>>();
+        public static List<Task> listOfTasks = new List<Task>();
         public static HtmlWeb web = new HtmlWeb();
-        const string baseUrl = "https://rpg.rem.uz";
+        public static string baseUrl = ConfigurationManager.AppSettings["baseUrl"];
+        public static string listFile = ConfigurationManager.AppSettings["LogFolder"];
 
-        public static string folderToSave = @"D:\Rpg-Rem";
+
+        public static string folderToSave = ConfigurationManager.AppSettings["SaveFolder"];
 
         public static HttpClient client = new HttpClient();
 
         static void Main(string[] args)
         {
-            var doc = web.Load(baseUrl);
+
+            //ItemFormatExample = @"/13th%20Age/13th%20Age%20Monthly%20-%20Vol%201/01%20-%20Dragon%20Riding.pdf";
 
             client.Timeout = TimeSpan.FromMinutes(15);
-            //var testValue = @"/13th%20Age/13th%20Age%20Monthly%20-%20Vol%201/01%20-%20Dragon%20Riding.pdf";
+            string localPath, fullPath;
+            int startIndex;
 
-            FilterPath(doc);
+            var doc = web.Load(baseUrl);
 
 
-            foreach (var item in endTargets)
+            if (!File.Exists(@listFile))
             {
-                DownloadFile(item);
-                //listOfTasks.Add(DownloadFile(item));
+                File.Create(@listFile);
             }
 
-            Task.WaitAll();
 
-            Console.WriteLine(endTargets.Count +" files downloaded");
+            #region short test list
+            endTargets = new List<string>();
+            endTargets.Add("/13th%20Age/13%20True%20Ways.pdf");
+            endTargets.Add("/13th%20Age/13th%20Age%20-%20Map.pdf");
+            endTargets.Add("/13th%20Age/13th%20Age%20Bestiary%202%20-%20Lions%20%26%20Tigers%20%26%20Owlbears.pdf");
+            #endregion
+
+
+            using (StreamWriter file = new StreamWriter(listFile, true))
+            {
+                foreach (var item in endTargets)
+                {
+                    file.WriteLine(item);
+                }
+            }
+
+            #region  download each files
+            //Parallel.ForEach<string>(endTargets, item =>
+            //{
+            //    var task = client.GetAsync(baseUrl + item)
+            //        .ContinueWith(async (x) =>
+            //        {
+            //            var fileName = item.Split('/').Last().Replace("%20%", " ");
+            //            startIndex = item.IndexOf(fileName);
+            //            localPath = item.Remove(startIndex).Replace('/', '\\');
+            //            fullPath = folderToSave + localPath;
+            //            Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
+
+            //              if (!File.Exists(fullPath + fileName))
+            //              {
+            //            var streamDest = File.Create(fullPath + fileName);
+            //            Console.WriteLine("Downloading " + fileName);
+            //            await x.Result.Content.CopyToAsync(streamDest);
+            //              }
+            //        });
+
+            //    listOfTasks.Add(task);// client.GetAsync(baseUrl + item));
+            //});
+            #endregion
+
+            Task.WaitAll(listOfTasks.ToArray());
+
+            Console.WriteLine(endTargets.Count + " files should have been downloaded");
             Console.ReadLine();
 
-            #region asyncprep
-            //Stream[] allStreams = await Task.WhenAll(listOfTasks);
-            
-            //foreach (var stream in allStreams)
-            //{
-            //    using (Stream file = File.Create(stream))
-            //}
-
-            #endregion
-
         }
 
-        static async Task DownloadFile(string item)
+        public static Task FilterPath(HtmlDocument doc)
         {
-            var fileName = item.Split('/').Last();
+            //this method will render the doc with Xpath, and search for the links in a table
+            //each link found will be parsed to find out if it's a file or another link
+            //sublinks are processed again, while fileLinks are added to "endTargets"
 
-            int startindex = item.IndexOf(fileName);
-
-            Console.WriteLine("downloading " + fileName);
-
-            var localPath = item.Remove(startindex).Replace('/', '\\');
-
-            var fullPath = folderToSave + localPath;
-            
-            Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
-
-            Task downloadFile = client.GetAsync(baseUrl + item).Result.Content.CopyToAsync(File.Create((fullPath+fileName)));
-
-            await downloadFile;
-            //Stream downloadedFile = client.GetAsync(baseUrl + item).Result.Content.ReadAsStreamAsync().Result;
-            
-            //using (Stream file = File.Create(fileName))
-            //{
-            //    Console.WriteLine("downloading " + fileName);
-            //    CopyStream(downloadedFile, file);
-            //}
-
-            #region async preparation 
-            //Task<Stream> mydownloadedFile = client.GetAsync(baseUrl + item).Result.Content.ReadAsStreamAsync();
-            //return mydownloadedFile;
-            //listOfTasks.Add(downloadedFile);
-            #endregion
-
-        }
-
-        public static void CopyStream(Stream input, Stream output)
-        {
-            byte[] buffer = new byte[8 * 1024];
-
-            int len;
-
-            while((len= input.Read(buffer, 0, buffer.Length)) > 0)
-            {
-                output.Write(buffer, 0, len);
-            }
-         }
-
-        public static void FilterPath(HtmlDocument doc)
-        {
+            var tasks = new List<Task>();
             var target = doc.DocumentNode.SelectNodes("//td/a");
 
-            foreach (var item in target)
+            Parallel.ForEach<HtmlNode>(target, item =>
             {
                 var href = item.Attributes["href"].Value;
 
-                if (href == "..")
-                    continue;
-
-                if (IsEndPath(href))
+                if (href != "..") //goes back to higher level, we need to avoid those
                 {
-                    if (!endTargets.Contains(href))
+                    if (!IsEndPath(href))
                     {
-                        endTargets.Add(href);
-                        continue;
+                        var uri = baseUrl + href;
+                        var newDoc = web.Load(uri);
+                        tasks.Add(FilterPath(newDoc));
+                    }
+                    else
+                    {
+                        if (!endTargets.Contains(href))
+                        {
+                            Console.WriteLine("Found path to file : " + href.Replace("%20%", " "));
+                            endTargets.Add(href);
+                        }
                     }
                 }
+            });
 
-                var uri = baseUrl + href;
-                var newDoc = web.Load(uri);
-
-                FilterPath(newDoc);
-
-            }
+            return Task.WhenAll(tasks);
         }
 
         public static bool IsEndPath(string path)
         {
-           return !path.EndsWith("/");
+            return !path.EndsWith("/");
         }
 
     }
