@@ -28,10 +28,10 @@ namespace Test_Console
             //ItemFormatExample = @"/13th%20Age/13th%20Age%20Monthly%20-%20Vol%201/01%20-%20Dragon%20Riding.pdf";
 
             #region short test list
-            endTargets = new List<string>();
-            endTargets.Add("/13th%20Age/13%20True%20Ways.pdf");
-            endTargets.Add("/13th%20Age/13th%20Age%20-%20Map.pdf");
-            endTargets.Add("/13th%20Age/13th%20Age%20Bestiary%202%20-%20Lions%20%26%20Tigers%20%26%20Owlbears.pdf");
+            //endTargets = new List<string>();
+            //endTargets.Add("/13th%20Age/13%20True%20Ways.pdf");
+            //endTargets.Add("/13th%20Age/13th%20Age%20-%20Map.pdf");
+            //endTargets.Add("/13th%20Age/13th%20Age%20Bestiary%202%20-%20Lions%20%26%20Tigers%20%26%20Owlbears.pdf");
             #endregion
             client.Timeout = TimeSpan.FromMinutes(15);
             //ensure the list-file exists
@@ -40,29 +40,28 @@ namespace Test_Console
                 File.Create(@listFile);
             }
 
-            
             try
             {
                 var doc = web.Load(baseUrl);
-                //FilterPath(doc);
+                FilterPath(doc);
                 DownloadFiles();
             }
             catch (Exception ex)
             {
+                Console.WriteLine(Environment.NewLine); 
+                Console.WriteLine(Environment.NewLine);
                 Console.WriteLine("Exception : " + ex.Message);
-                Console.WriteLine("last uri processed : " + endTargets.Last());
-                using(StreamWriter file = new StreamWriter(listFile))
-                {
-                    foreach (var item in endTargets)
-                    {
-                        file.WriteLine(CleanName(item));
-                    }
-                }
+                Console.WriteLine("Stack  : " + ex.StackTrace);
             }
 
-            Task.WaitAll(listOfTasks.ToArray());
+            Task[] tasksArray = listOfTasks.Where(t => t != null).ToArray();
+            if (tasksArray.Length > 0) Task.WaitAll(tasksArray);
+
+            //Task.WaitAll(listOfTasks.ToArray());
 
             Console.WriteLine(endTargets.Count + " files have been identified");
+
+
             Console.ReadLine();
 
         }
@@ -74,33 +73,30 @@ namespace Test_Console
         {
             //var tasks = new List<Task>();
             var target = doc.DocumentNode.SelectNodes("//td/a");
-            
-                Parallel.ForEach<HtmlNode>(target, item =>
-                {
-                    var href = item.Attributes["href"].Value;
 
-                    //List<Task> tasks = new List<Task>();
+            Parallel.ForEach<HtmlNode>(target, item =>
+            {
+                var href = item.Attributes["href"].Value;
 
                     if (href != "..") //goes back to higher level, we need to avoid those
                     {
-                        if (!IsEndPath(href))
-                        {
-                            var uri = baseUrl + href;
-                            var newDoc = web.Load(uri);
-                            //tasks.Add(FilterPath(newDoc));
+                    if (!IsEndPath(href))
+                    {
+                        var uri = baseUrl + href;
+                        var newDoc = web.Load(uri);
                             FilterPath(newDoc);
-                        }
-                        else
+                    }
+                    else
+                    {
+                        if (!endTargets.Contains(href))
                         {
-                            if (!endTargets.Contains(href))
-                            {
-                                //file.WriteLine(href);
-                                endTargets.Add(href);
-                            }
+                            //file.WriteLine(href);
+                            Console.WriteLine("Adding path "+CleanName(href));
+                            endTargets.Add(href);
                         }
                     }
-                });
-            //return Task.WhenAll(tasks);
+                }
+            });
         }
 
         private static void DownloadFiles()
@@ -108,36 +104,65 @@ namespace Test_Console
             int startIndex;
             string partialPath, localFolderPath;
 
-            Parallel.ForEach<string>(endTargets, item =>
+            while (endTargets.Count > 0)
             {
-                var task = client.GetAsync(baseUrl + item)
-                    .ContinueWith(async (x) =>
-                    {
-                        var fileName = item.Split('/').Last();
-                        startIndex = item.IndexOf(fileName);
-                        partialPath = item.Remove(startIndex).Replace('/', '\\');
-                        localFolderPath = folderToSave + partialPath;
-                        Directory.CreateDirectory(Path.GetDirectoryName(localFolderPath));
+                listOfTasks = new List<Task>();
 
-                        if (!File.Exists(localFolderPath + fileName))
+                List<string> currentTargets = endTargets.GetRange(0,50);
+
+                endTargets.RemoveRange(0, 50);
+
+                Parallel.ForEach<string>(currentTargets, item =>
+                {
+                    var task = client.GetAsync(baseUrl + item)
+                        .ContinueWith(async (x) =>
                         {
-                            var streamDest = File.Create(localFolderPath + fileName);
-                            Console.WriteLine("Downloading " + CleanName(fileName));
-                            var pdfFile = x.Result.Content.ReadAsStreamAsync().Result;
+                            var fileName = item.Split('/').Last();
+                            startIndex = item.IndexOf(fileName);
+                            partialPath = item.Remove(startIndex).Replace('/', '\\');
+                            localFolderPath = folderToSave + CleanName(partialPath);
+                            Directory.CreateDirectory(Path.GetDirectoryName(localFolderPath));
 
-                            using (streamDest)
+                            if (!File.Exists(localFolderPath + fileName))
                             {
-                                pdfFile.CopyTo(streamDest);
+                                var streamDest = File.Create(localFolderPath + CleanName(fileName));
+                                Console.WriteLine("Downloading " + CleanName(fileName));
+                                var pdfFile = x.Result.Content.ReadAsStreamAsync().Result;
+
+                                using (streamDest)
+                                {
+                                    pdfFile.CopyTo(streamDest);
+                                }
+
                             }
+                        });
+                    if (task != null)
+                    {
+                        listOfTasks.Add(task);
+                    }
+                });
 
-                            //x.Result.Content.CopyToAsync(streamDest);
-                        }
-                    });
-
-                listOfTasks.Add(task);
-            });
+                Task[] tasksArray = listOfTasks.Where(t => t != null).ToArray();
+                if (tasksArray.Length > 0) Task.WaitAll(tasksArray);
+            }
         }
 
+        #region attempt to find files with size 0k
+        //static void DirSearch(string sDir)
+        //{
+        //    foreach (var dir in Directory.GetDirectories(sDir))
+        //    {
+        //        foreach (var file in Directory.GetFiles(dir))
+        //        {
+        //            var length = new FileInfo(file).Length;
+
+        //            if (length == 0)
+
+        //        }
+        //        DirSearch(dir);
+        //    }
+        //}
+        #endregion  
 
         public static bool IsEndPath(string path)
         {
@@ -146,7 +171,7 @@ namespace Test_Console
 
         public static string CleanName(string name)
         {
-            return name.Split('/').Last().Replace("%20%26%20", "&").Replace("%20", " ");
+            return name.Split('/').Last().Replace("%20%26%20", "&").Replace("%20", " ").Replace("%27", "'").Replace("%29", "\"");
         }
 
     }
