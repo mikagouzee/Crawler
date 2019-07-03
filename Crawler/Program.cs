@@ -14,10 +14,11 @@ namespace Test_Console
     {
         public static List<string> endTargets = new List<string>();
         public static List<Task> listOfTasks = new List<Task>();
-        public static HtmlWeb web = new HtmlWeb();
-        const string baseUrl = "https://rpg.rem.uz";
 
-        public static string folderToSave = @"C:\Users\mgouzee\Desktop\Crawler\Crawler\Downloaded";
+        public static HtmlWeb web = new HtmlWeb();
+        const string baseUrl = "https://thetrove.net/Books/Call%20of%20Cthulhu/Achtung!%20Cthulhu/Achtung!%20Cthulhu%20Skirmish/";
+
+        public static string folderToSave = @"C:\Users\mgo\Desktop\Folder\Crawler\pdfs";
 
         public static HttpClient client = new HttpClient();
 
@@ -27,15 +28,17 @@ namespace Test_Console
             string localPath, fullPath;
             int startIndex;
 
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
             var doc = web.Load(baseUrl);
             FilterPath(doc).Wait();
             //ItemFormat = @"/13th%20Age/13th%20Age%20Monthly%20-%20Vol%201/01%20-%20Dragon%20Riding.pdf";
 
             #region short test list
-            //endTargets = new List<string>();
-            //endTargets.Add("/13th%20Age/13%20True%20Ways.pdf");
-            //endTargets.Add("/13th%20Age/13th%20Age%20-%20Map.pdf");
-            //endTargets.Add("/13th%20Age/13th%20Age%20Bestiary%202%20-%20Lions%20%26%20Tigers%20%26%20Owlbears.pdf");
+            endTargets = new List<string>();
+            endTargets.Add("Achtung! Cthulhu Skirmish - Campaign - Rise of the Black Sun.pdf");
+            endTargets.Add("Achtung! Cthulhu Skirmish - Campaign - Secret War Operations.pdf");
+            endTargets.Add("Achtung! Cthulhu Skirmish - Notoriety Trackers.pdf");
             #endregion
 
             //download each files
@@ -66,6 +69,8 @@ namespace Test_Console
 
         }
 
+
+        // To rewrite, struct is different in trove.net
         public static Task FilterPath(HtmlDocument doc)
         {
             //this method will render the doc with Xpath, and search for the links in a table
