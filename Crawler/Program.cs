@@ -75,7 +75,6 @@ namespace Test_Console
         }
 
 
-        // To rewrite, struct is different in trove.net
         public static Task FilterPath(HtmlDocument doc)
         {
             //this method will render the doc with Xpath, and search for the links in a table
